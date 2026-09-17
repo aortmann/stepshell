@@ -1,0 +1,87 @@
+{{- if .Values.userAccess.enabled }}
+{{- $subjects := .Values.userAccess.subjects }}
+{{- if not $subjects }}
+{{- fail "userAccess.enabled is true but userAccess.subjects is empty" }}
+{{- end }}
+# Per-namespace access users need to drive stepshell (see spec §4.4). These grant
+# the *user's* identity (via impersonation) the verbs stepshell relies on. Adjust
+# to taste or manage this RBAC outside the chart.
+{{- range $ns := .Values.userAccess.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "stepshell.fullname" $ }}-user
+  namespace: {{ $ns }}
+  labels:
+    {{- include "stepshell.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods/ephemeralcontainers"]
+    verbs: ["update"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  {{- if $.Values.auditEvents }}
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+  {{- end }}
+  {{- if $.Values.argo.enabled }}
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtemplates"]
+    verbs: ["get", "list"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "stepshell.fullname" $ }}-user
+  namespace: {{ $ns }}
+  labels:
+    {{- include "stepshell.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "stepshell.fullname" $ }}-user
+subjects:
+  {{- toYaml $subjects | nindent 2 }}
+{{- end }}
+{{- if $.Values.argo.enabled }}
+---
+# clusterworkflowtemplates are cluster-scoped, so a ClusterRole is needed to
+# inline a clusterScope workflowTemplateRef during a breakpoint re-run.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "stepshell.fullname" . }}-user-cwft
+  labels:
+    {{- include "stepshell.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["clusterworkflowtemplates"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "stepshell.fullname" . }}-user-cwft
+  labels:
+    {{- include "stepshell.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "stepshell.fullname" . }}-user-cwft
+subjects:
+  {{- toYaml $subjects | nindent 2 }}
+{{- end }}
+{{- end }}

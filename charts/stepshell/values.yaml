@@ -1,0 +1,122 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/strikesecurity/stepshell
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Public URL stepshell is served on. REQUIRED. Used for the OIDC redirect and
+# the WebSocket Origin check.
+baseURL: "" # e.g. https://stepshell.example.com
+
+# authMode: "oidc" (production) or "none" (dev only; refuses non-localhost URLs
+# unless allowInsecureNone is set).
+authMode: oidc
+allowInsecureNone: false
+
+oidc:
+  issuer: ""
+  clientID: ""
+  # clientSecret is read from a Secret. Set it here (chart creates the Secret)
+  # or point existingSecret at your own.
+  clientSecret: ""
+  scopes:
+    - openid
+    - profile
+    - email
+    - groups
+  usernameClaim: email
+  groupsClaim: groups
+
+# Prefixes to make impersonated subjects match the cluster's OIDC RBAC
+# (mirror the apiserver's --oidc-username-prefix / --oidc-groups-prefix).
+impersonate:
+  userPrefix: ""
+  groupPrefix: ""
+
+session:
+  # 32-byte base64 key shared across replicas. If empty and existingSecret is
+  # unset, the chart generates one at install and preserves it across upgrades.
+  key: ""
+  ttl: 8h
+
+# Reuse an existing Secret instead of having the chart create one. It must
+# contain keys: oidc-client-secret, session-key.
+existingSecret: ""
+
+argo:
+  enabled: true
+  uiURL: "" # e.g. https://argo-workflows.example.com, for "open in Argo" links
+  debugTTL: 3600
+
+# Fallback namespaces shown when a user cannot list namespaces cluster-wide.
+namespaces: []
+
+debugImage: nicolaka/netshoot:latest
+auditEvents: true
+logLevel: info
+
+# The server ServiceAccount holds ONLY impersonate rights. Every user action
+# runs as the logged-in user via impersonation, so the cluster's own RBAC
+# decides what they can do.
+rbac:
+  create: true
+  # Restrict which groups may be impersonated (resourceNames on the groups
+  # rule). Empty = any group. Pin this in production.
+  allowedGroups: []
+
+# Optionally provision the per-namespace access users need (section 4.4 of the
+# spec): a Role+RoleBinding per namespace for the given subjects, plus a
+# ClusterRole for clusterworkflowtemplates. Leave subjects empty to manage RBAC
+# yourself.
+userAccess:
+  enabled: false
+  namespaces: []
+  subjects: []
+    # - kind: Group
+    #   name: strikesecurity:cloud
+    # - kind: User
+    #   name: alice@example.com
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # For AWS ALB, raise the idle timeout so long-lived exec WebSockets survive:
+    # alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=3600
+  hosts:
+    - host: stepshell.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

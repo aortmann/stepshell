@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stepshell.fullname" . }}
+  labels:
+    {{- include "stepshell.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "stepshell.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "stepshell.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "stepshell.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: stepshell
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+            - --listen=:8080
+            - --base-url={{ required "baseURL is required" .Values.baseURL }}
+            - --auth.mode={{ .Values.authMode }}
+            {{- if .Values.allowInsecureNone }}
+            - --auth.allow-insecure-none
+            {{- end }}
+            {{- if eq .Values.authMode "oidc" }}
+            - --oidc.issuer={{ .Values.oidc.issuer }}
+            - --oidc.client-id={{ .Values.oidc.clientID }}
+            - --oidc.scopes={{ join "," .Values.oidc.scopes }}
+            - --oidc.username-claim={{ .Values.oidc.usernameClaim }}
+            - --oidc.groups-claim={{ .Values.oidc.groupsClaim }}
+            {{- end }}
+            {{- with .Values.impersonate.userPrefix }}
+            - --impersonate.user-prefix={{ . }}
+            {{- end }}
+            {{- with .Values.impersonate.groupPrefix }}
+            - --impersonate.group-prefix={{ . }}
+            {{- end }}
+            - --session.ttl={{ .Values.session.ttl }}
+            - --argo.enabled={{ .Values.argo.enabled }}
+            {{- with .Values.argo.uiURL }}
+            - --argo.ui-url={{ . }}
+            {{- end }}
+            - --argo.debug-ttl={{ .Values.argo.debugTTL }}
+            - --debug.image={{ .Values.debugImage }}
+            - --audit.events={{ .Values.auditEvents }}
+            - --log.level={{ .Values.logLevel }}
+            {{- with .Values.namespaces }}
+            - --namespaces={{ join "," . }}
+            {{- end }}
+          env:
+            - name: STEPSHELL_SESSION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stepshell.secretName" . }}
+                  key: session-key
+            {{- if eq .Values.authMode "oidc" }}
+            - name: STEPSHELL_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stepshell.secretName" . }}
+                  key: oidc-client-secret
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

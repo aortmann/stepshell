@@ -1,0 +1,16 @@
+apiVersion: v2
+name: stepshell
+description: Authenticated web shell for Kubernetes pods, with Argo Workflows debug-pause awareness.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/strikesecurity/stepshell
+sources:
+  - https://github.com/strikesecurity/stepshell
+keywords:
+  - kubernetes
+  - argo-workflows
+  - webshell
+  - debugging
+maintainers:
+  - name: Strike Security

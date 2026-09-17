@@ -1,6 +1,9 @@
 /bin/
-/web/dist/
 /web/node_modules/
 *.test
 .DS_Store
+
+# Built UI assets are generated (make ui / Docker). Ignore everything under
+# dist/ except the committed placeholder, so a fresh clone still `go build`s.
+/web/dist/*
 !/web/dist/index.html

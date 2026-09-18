@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -141,6 +142,14 @@ func (a *Authenticator) identityFromClaims(idToken *oidc.IDToken) (session.Ident
 	}
 	email, _ := claims["email"].(string)
 	groups := extractStringSlice(claims[a.cfg.OIDC.GroupsClaim])
+
+	// Diagnostic: which claim keys the ID token carried, and the extracted groups.
+	keys := make([]string, 0, len(claims))
+	for k := range claims {
+		keys = append(keys, k)
+	}
+	slog.Info("identity from claims", "user", user, "groupsClaim", a.cfg.OIDC.GroupsClaim,
+		"groups", groups, "tokenClaimKeys", keys)
 
 	return session.Identity{User: user, Groups: groups, Email: email}, nil
 }

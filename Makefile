@@ -1,4 +1,4 @@
-IMAGE ?= ghcr.io/strikesecurity/stepshell
+IMAGE ?= ghcr.io/aortmann/stepshell
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: all ui build test lint fmt run docker clean

@@ -4,9 +4,9 @@ description: Authenticated web shell for Kubernetes pods, with Argo Workflows de
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/strikesecurity/stepshell
+home: https://github.com/aortmann/stepshell
 sources:
-  - https://github.com/strikesecurity/stepshell
+  - https://github.com/aortmann/stepshell
 keywords:
   - kubernetes
   - argo-workflows

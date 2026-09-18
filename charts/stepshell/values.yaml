@@ -19,14 +19,12 @@ authMode: oidc
 allowInsecureNone: false
 
 oidc:
-  # You can reuse an existing OIDC provider — including the Dex that Argo CD
-  # already runs for GitHub SSO. Add stepshell as a Dex staticClient and point
-  # issuer at Dex's public URL (its `issuer` in /.well-known/openid-configuration
-  # must match EXACTLY). With Dex + GitHub the `groups` claim arrives as
-  # "org:team" (e.g. strikesecurity:cloud), matching Argo CD's policy.csv.
-  #
-  #   issuer: https://argo.strike.sh/api/dex
-  #   clientID: stepshell
+  # Point stepshell at any OIDC issuer. Two common setups:
+  #  - Bundled Dex (dex.enabled=true below): leave issuer/clientID/clientSecret
+  #    empty and the chart wires them to the in-cluster Dex automatically.
+  #  - External issuer (Okta, Entra, Google, or an existing Dex): set these.
+  # The issuer must match the provider's advertised `issuer` in
+  # /.well-known/openid-configuration EXACTLY, or token verification fails.
   issuer: ""
   clientID: ""
   # clientSecret is read from a Secret. Set it here (chart creates the Secret)
@@ -39,6 +37,33 @@ oidc:
     - groups
   usernameClaim: email
   groupsClaim: groups
+
+# Bundled Dex — stepshell's own OIDC provider, so it does not depend on any
+# other service. With the GitHub connector the `groups` claim arrives as
+# "org:team" (e.g. strikesecurity:cloud), which you can pin in rbac.allowedGroups
+# and reuse in your cluster RBAC. When enabled, the oidc.* fields above are wired
+# to this Dex automatically; you only provide the GitHub OAuth app credentials.
+dex:
+  enabled: false
+  image: ghcr.io/dexidp/dex:v2.44.0
+  # Public URL Dex is reachable at. REQUIRED when dex.enabled. Its /dex path is
+  # served through stepshell's own ingress host by default (see ingress.dex).
+  # The issuer becomes "<dex.publicURL>".
+  publicURL: "" # e.g. https://stepshell.example.com/dex
+  # GitHub OAuth app. Create one at https://github.com/settings/developers with
+  # Authorization callback URL "<dex.publicURL>/callback".
+  github:
+    clientID: ""
+    clientSecret: "" # stored in the chart Secret (or use existingSecret)
+    orgs: []
+      # - name: your-org
+      #   teams: [platform, sre]  # omit teams to allow the whole org
+  # Secret shared between stepshell and Dex (the OIDC client secret for the
+  # stepshell static client). Generated and preserved if left empty.
+  clientSecret: ""
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 64Mi }
 
 # Prefixes to make impersonated subjects match the cluster's OIDC RBAC
 # (mirror the apiserver's --oidc-username-prefix / --oidc-groups-prefix).

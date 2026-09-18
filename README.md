@@ -81,48 +81,39 @@ userAccess:
       name: your-oidc-group
 ```
 
-### Reusing Argo CD's Dex for GitHub SSO
+### GitHub login via the bundled Dex
 
-GitHub is not an OIDC provider, so Argo CD fronts it with [Dex](https://dexidp.io).
-You can reuse that same Dex instead of standing up your own — one GitHub OAuth
-app, one place for the secret, and users get the identical login. The `groups`
-claim arrives as `org:team` (e.g. `strikesecurity:cloud`), so stepshell's
-impersonation can authorize on the very same teams your Argo CD `policy.csv`
-already uses.
+GitHub is not an OIDC provider, so stepshell can bring its own
+[Dex](https://dexidp.io) to bridge it — self-contained, no dependency on any
+other service. The `groups` claim arrives as `org:team` (e.g.
+`strikesecurity:cloud`), which you pin in `rbac.allowedGroups` and can reuse in
+your cluster RBAC.
 
-1. Add stepshell as a `staticClient` in Argo CD's `dex.config`, and inject its
-   secret into the dex container from `argocd-secret`:
+1. Create a **GitHub OAuth app** (Settings → Developer settings → OAuth Apps)
+   with callback URL `https://stepshell.example.com/dex/callback`.
 
-   ```yaml
-   # argocd values
-   configs.cm.dex.config: |
-     connectors: [ ... your github connector ... ]
-     staticClients:
-       - id: stepshell
-         name: stepshell
-         secretEnv: DEX_STEPSHELL_CLIENT_SECRET
-         redirectURIs:
-           - https://stepshell.example.com/auth/callback
-   dex.env:
-     - name: DEX_STEPSHELL_CLIENT_SECRET
-       valueFrom:
-         secretKeyRef: { name: argocd-secret, key: dex.stepshell.clientSecret }
-   ```
-
-   Add the `dex.stepshell.clientSecret` key to `argocd-secret` (same out-of-band
-   path as `dex.github.clientSecret`), then restart the dex server.
-
-2. Point stepshell at that Dex. The issuer must match Dex's advertised
-   `issuer` exactly — check `curl .../api/dex/.well-known/openid-configuration`:
+2. Enable the bundled Dex. stepshell's `oidc.*` fields are wired to it
+   automatically — you only pass the GitHub app credentials:
 
    ```bash
    helm install stepshell ./charts/stepshell \
      --set baseURL=https://stepshell.example.com \
-     --set oidc.issuer=https://argo.example.com/api/dex \
-     --set oidc.clientID=stepshell \
-     --set oidc.clientSecret=<same secret> \
-     --set-json 'rbac.allowedGroups=["strikesecurity:cloud","strikesecurity:admins"]'
+     --set dex.enabled=true \
+     --set dex.publicURL=https://stepshell.example.com/dex \
+     --set dex.github.clientID=<oauth app id> \
+     --set dex.github.clientSecret=<oauth app secret> \
+     --set-json 'dex.github.orgs=[{"name":"your-org","teams":["cloud","admins"]}]' \
+     --set ingress.enabled=true \
+     --set-json 'rbac.allowedGroups=["your-org:cloud","your-org:admins"]'
    ```
+
+   Dex is served under `/dex` on the same host and ingress; the chart routes it
+   automatically. The stepshell↔Dex client secret is generated and kept stable
+   across upgrades.
+
+Prefer an existing IdP (Okta, Entra, Google, or a Dex you already run)? Leave
+`dex.enabled=false` and set `oidc.issuer` / `oidc.clientID` / `oidc.clientSecret`
+directly. The issuer must match the provider's advertised `issuer` exactly.
 
 **Behind an AWS ALB**, raise the idle timeout so long-lived exec WebSockets
 don't drop at 60s:

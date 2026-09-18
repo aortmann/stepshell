@@ -18,10 +18,25 @@ spec:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   rules:
+    {{- $dexPath := "" }}
+    {{- if .Values.dex.enabled }}
+    {{- $u := urlParse (include "stepshell.oidc.issuer" .) }}
+    {{- $dexPath = $u.path }}
+    {{- end }}
     {{- range .Values.ingress.hosts }}
     - host: {{ .host | quote }}
       http:
         paths:
+          {{- /* Dex path first so it matches before the SPA catch-all. */ -}}
+          {{- if $dexPath }}
+          - path: {{ $dexPath }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "stepshell.dex.fullname" $ }}
+                port:
+                  number: 5556
+          {{- end }}
           {{- range .paths }}
           - path: {{ .path }}
             pathType: {{ .pathType | default "Prefix" }}

@@ -1,0 +1,97 @@
+{{- if .Values.dex.enabled }}
+{{- $dexName := include "stepshell.dex.fullname" . }}
+{{- $config := include "stepshell.dex.config" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $dexName }}
+  labels:
+    {{- include "stepshell.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- $config | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $dexName }}
+  labels:
+    {{- include "stepshell.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "stepshell.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: dex
+  template:
+    metadata:
+      labels:
+        {{- include "stepshell.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: dex
+      annotations:
+        # Roll the pod when the config changes.
+        checksum/config: {{ $config | sha256sum }}
+    spec:
+      containers:
+        - name: dex
+          image: {{ .Values.dex.image }}
+          args: ["dex", "serve", "/etc/dex/config.yaml"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stepshell.secretName" . }}
+                  key: dex-github-client-secret
+            - name: STEPSHELL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stepshell.secretName" . }}
+                  key: oidc-client-secret
+          ports:
+            - name: http
+              containerPort: 5556
+            - name: telemetry
+              containerPort: 5558
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: telemetry
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: telemetry
+          resources:
+            {{- toYaml .Values.dex.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $dexName }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $dexName }}
+  labels:
+    {{- include "stepshell.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dex
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5556
+      targetPort: http
+      name: http
+  selector:
+    {{- include "stepshell.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dex
+{{- end }}

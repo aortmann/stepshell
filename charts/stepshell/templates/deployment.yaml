@@ -39,8 +39,8 @@ spec:
             - --auth.allow-insecure-none
             {{- end }}
             {{- if eq .Values.authMode "oidc" }}
-            - --oidc.issuer={{ .Values.oidc.issuer }}
-            - --oidc.client-id={{ .Values.oidc.clientID }}
+            - --oidc.issuer={{ include "stepshell.oidc.issuer" . }}
+            - --oidc.client-id={{ include "stepshell.oidc.clientID" . }}
             - --oidc.scopes={{ join "," .Values.oidc.scopes }}
             - --oidc.username-claim={{ .Values.oidc.usernameClaim }}
             - --oidc.groups-claim={{ .Values.oidc.groupsClaim }}

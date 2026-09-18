@@ -19,6 +19,14 @@ authMode: oidc
 allowInsecureNone: false
 
 oidc:
+  # You can reuse an existing OIDC provider — including the Dex that Argo CD
+  # already runs for GitHub SSO. Add stepshell as a Dex staticClient and point
+  # issuer at Dex's public URL (its `issuer` in /.well-known/openid-configuration
+  # must match EXACTLY). With Dex + GitHub the `groups` claim arrives as
+  # "org:team" (e.g. strikesecurity:cloud), matching Argo CD's policy.csv.
+  #
+  #   issuer: https://argo.strike.sh/api/dex
+  #   clientID: stepshell
   issuer: ""
   clientID: ""
   # clientSecret is read from a Secret. Set it here (chart creates the Secret)

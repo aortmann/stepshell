@@ -142,6 +142,10 @@ resources:
 podAnnotations: {}
 podSecurityContext:
   runAsNonRoot: true
+  # distroless nonroot is UID 65532; a numeric UID is required so the kubelet
+  # can verify non-root when the image declares a non-numeric user.
+  runAsUser: 65532
+  runAsGroup: 65532
   seccompProfile:
     type: RuntimeDefault
 securityContext:

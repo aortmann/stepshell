@@ -33,6 +33,13 @@ spec:
         # Roll the pod when the config changes.
         checksum/config: {{ $config | sha256sum }}
     spec:
+      securityContext:
+        # The dexidp/dex image runs as UID 1001.
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: dex
           image: {{ .Values.dex.image }}
@@ -73,10 +80,16 @@ spec:
             - name: config
               mountPath: /etc/dex
               readOnly: true
+            # Dex writes an expanded config to a temp file; give it a writable
+            # /tmp since the root filesystem is read-only.
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: config
           configMap:
             name: {{ $dexName }}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

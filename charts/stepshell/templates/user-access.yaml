@@ -21,7 +21,10 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods/exec"]
-    verbs: ["create"]
+    # get: the WebSocket exec transport (client-go NewWebSocketExecutor) issues a
+    # GET, which RBAC authorizes as the `get` verb; create: the SPDY fallback and
+    # kubectl-style POST exec. Grant both so either transport works.
+    verbs: ["get", "create"]
   - apiGroups: [""]
     resources: ["pods/ephemeralcontainers"]
     verbs: ["update"]

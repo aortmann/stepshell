@@ -1,38 +1,62 @@
-# stepshell
+<h1 align="center">stepshell</h1>
 
-An authenticated web shell for Kubernetes pods, aware of Argo Workflows'
-**debug pause**. Deep-link straight from the Argo Workflows or Argo CD UI into a
-running step pod, or re-run a workflow with a breakpoint so a too-fast step
-holds still while you look inside.
+<p align="center">
+  <b>A shell into your Kubernetes pods that your cluster's RBAC actually
+  authorizes — and that finally understands Argo Workflows.</b>
+</p>
 
-Argo Workflows has no terminal in its UI and no extension point to add one
-([#6945](https://github.com/argoproj/argo-workflows/issues/6945) has been open
-since 2021). The debug-pause backend exists
-([#6841](https://github.com/argoproj/argo-workflows/issues/6841)) but never got a
-UI. Generic Kubernetes web terminals either ship without authentication or are
-whole platforms. stepshell is the small, authenticated, Argo-aware piece that
-was missing.
+<p align="center">
+  <a href="https://github.com/aortmann/stepshell/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/go-1.27-00ADD8?logo=go&logoColor=white" alt="Go">
+  <img src="https://img.shields.io/badge/single%20binary-UI%20embedded-success" alt="Single binary">
+  <img src="https://img.shields.io/badge/auth-OIDC%20%2B%20impersonation-8A2BE2" alt="Auth">
+</p>
 
-> **Pausing is optional.** A live pod is always shell-able without pausing —
-> open a shell, `tail -f` a log, poke at the filesystem. Pausing is only for the
-> case where the step finishes before you can catch it.
+<p align="center">
+  <img src="docs/img/terminal.jpg" alt="stepshell terminal into a live Argo Workflows step pod" width="90%">
+</p>
 
-## What it does
+Open a terminal into any running pod straight from the Argo Workflows (or Argo
+CD) UI. See the processes, `tail -f` the logs, poke at the filesystem — as
+**you**, not as a shared service account. And when a step is too fast to catch,
+**re-run it with a breakpoint** so it holds still while you look inside.
 
-- **Web terminal** into any pod/container, deep-linkable:
-  `/shell/{namespace}/{pod}?container=main`. Optionally run a fixed command:
-  `?cmd=tail%20-f%20/var/log/app.log`.
-- **Per-user identity.** OIDC login, then Kubernetes **impersonation** — the
-  server holds no `pods/exec` rights of its own; your cluster's RBAC decides,
-  and the API-server audit log sees the real person.
-- **Shell-less images.** One click attaches an ephemeral debug container
-  (`nicolaka/netshoot`) sharing the target's PID namespace and volume mounts, so
-  you get a shell, the target's processes (`/proc/1/root`), and its filesystem
-  even on distroless images.
-- **Argo aware.** Browse workflows, jump to a step's pod, **re-run with a
-  breakpoint** (injects `ARGO_DEBUG_PAUSE_*`), and **release** a paused step
-  from the UI. Pod names are computed for GC'd pods so the mapping still shows.
-- **Standalone.** Single Go binary with the UI embedded, plus a Helm chart.
+## Why this exists
+
+If you run Argo Workflows, you've hit this: a step fails, you want to look
+inside the pod, and there's *no terminal in the UI*. So you race `kubectl exec`
+against a pod that's already been garbage-collected.
+
+- **The UI has no terminal** — and no extension point to add one.
+  [argoproj/argo-workflows#6945](https://github.com/argoproj/argo-workflows/issues/6945)
+  has been open since 2021. The maintainers' answer to "let me shell in" is
+  literally *"use `kubectl exec`."*
+- **The debug-pause backend exists but never got a UI.**
+  [#6841](https://github.com/argoproj/argo-workflows/issues/6841) shipped the
+  mechanism (two env vars + a marker file) and closed. Nobody built the button.
+- **Generic K8s web terminals don't fit.** They either ship with *no auth* (a
+  root shell for anyone who reaches the URL) or they're a whole platform you now
+  have to operate.
+
+stepshell is the small, authenticated, Argo-aware piece that was missing — one
+Go binary and a Helm chart.
+
+## Features
+
+| | |
+|---|---|
+| 🔐 **Real per-user identity** | OIDC login, then Kubernetes **impersonation**. The server holds *no* `pods/exec` rights of its own — your cluster's RBAC decides, and the API-server audit log sees the actual person, not a shared SA. |
+| 🧩 **Argo Workflows native** | Browse workflows, jump to a step's pod, and **re-run with a breakpoint** — one click injects `ARGO_DEBUG_PAUSE_*`, holds the step, and hands you a shell. Release it from the UI when you're done. |
+| 🐚 **Shell-less images** | Distroless pod with no `/bin/sh`? One click attaches an ephemeral debug container sharing the target's PID namespace and mounts — you get its processes (`/proc/1/root`) and filesystem anyway. |
+| 🔗 **Deep-linkable** | `/shell/{ns}/{pod}?container=main`, or `?cmd=tail -f /var/log/app.log`. Drop it straight into the Argo UI as a per-pod link. |
+| 📦 **Standalone** | Single Go binary with the UI embedded. No database — the session is an encrypted cookie. Bundled Dex can front GitHub SSO, or point it at your own IdP. |
+
+<p align="center">
+  <img src="docs/img/workflow-view.jpg" alt="stepshell workflow list" width="90%">
+</p>
+
+> **Pausing is optional.** A live pod is always shell-able without pausing — the
+> breakpoint is only for the step that finishes before you can catch it.
 
 ## Architecture
 
@@ -86,7 +110,7 @@ userAccess:
 GitHub is not an OIDC provider, so stepshell can bring its own
 [Dex](https://dexidp.io) to bridge it — self-contained, no dependency on any
 other service. The `groups` claim arrives as `org:team` (e.g.
-`strikesecurity:cloud`), which you pin in `rbac.allowedGroups` and can reuse in
+`your-org:platform`), which you pin in `rbac.allowedGroups` and can reuse in
 your cluster RBAC.
 
 1. Create a **GitHub OAuth app** (Settings → Developer settings → OAuth Apps)
@@ -150,6 +174,8 @@ resource.links: |
 ```
 
 ## Debug pause, end to end
+
+The feature Argo built but never surfaced — now a button:
 
 1. On a workflow page, open **Re-run with breakpoint**, choose *pause after
    step* (and optionally which templates), submit. stepshell clones the
